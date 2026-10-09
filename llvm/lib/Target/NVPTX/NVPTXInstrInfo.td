@@ -1480,6 +1480,33 @@ defm OR  : BITWISE<"or", or>;
 defm AND : BITWISE<"and", and>;
 defm XOR : BITWISE<"xor", xor>;
 
+// Arbitrary three-input Boolean operation, with one bit per truth-table entry.
+def SDTLOP3 : SDTypeProfile<1, 4,
+  [SDTCisVT<0, i32>, SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>,
+   SDTCisSameAs<0, 3>, SDTCisVT<4, i32>]>;
+def lop3 : SDNode<"NVPTXISD::LOP3", SDTLOP3>;
+
+class LOP3<dag ins, dag args> :
+  BasicNVPTXInst<(outs B32:$dst), ins, "lop3.b32",
+                [(set i32:$dst, args)]>, Requires<[SM50, PTX43]>;
+
+def LOP3rrr : LOP3<(ins B32:$a, B32:$b, B32:$c, i32imm:$lut),
+                   (lop3 i32:$a, i32:$b, i32:$c, imm:$lut)>;
+def LOP3rri : LOP3<(ins B32:$a, B32:$b, i32imm:$c, i32imm:$lut),
+                   (lop3 i32:$a, i32:$b, imm:$c, imm:$lut)>;
+def LOP3rir : LOP3<(ins B32:$a, i32imm:$b, B32:$c, i32imm:$lut),
+                   (lop3 i32:$a, imm:$b, i32:$c, imm:$lut)>;
+def LOP3rii : LOP3<(ins B32:$a, i32imm:$b, i32imm:$c, i32imm:$lut),
+                   (lop3 i32:$a, imm:$b, imm:$c, imm:$lut)>;
+def LOP3irr : LOP3<(ins i32imm:$a, B32:$b, B32:$c, i32imm:$lut),
+                   (lop3 imm:$a, i32:$b, i32:$c, imm:$lut)>;
+def LOP3iri : LOP3<(ins i32imm:$a, B32:$b, i32imm:$c, i32imm:$lut),
+                   (lop3 imm:$a, i32:$b, imm:$c, imm:$lut)>;
+def LOP3iir : LOP3<(ins i32imm:$a, i32imm:$b, B32:$c, i32imm:$lut),
+                   (lop3 imm:$a, imm:$b, i32:$c, imm:$lut)>;
+def LOP3iii : LOP3<(ins i32imm:$a, i32imm:$b, i32imm:$c, i32imm:$lut),
+                   (lop3 imm:$a, imm:$b, imm:$c, imm:$lut)>;
+
 // PTX does not support mul on predicates, convert to and instructions
 def : Pat<(mul i1:$a, i1:$b), (AND_predrr $a, $b)>;
 def : Pat<(mul i1:$a, imm:$b), (AND_predri $a, imm:$b)>;

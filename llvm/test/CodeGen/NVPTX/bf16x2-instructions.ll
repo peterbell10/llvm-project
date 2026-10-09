@@ -709,15 +709,13 @@ define <2 x bfloat> @test_round(<2 x bfloat> %a) #0 {
 define <2 x bfloat> @test_copysign(<2 x bfloat> %a, <2 x bfloat> %b) #0 {
 ; CHECK-LABEL: test_copysign(
 ; CHECK:       {
-; CHECK-NEXT:    .reg .b32 %r<6>;
+; CHECK-NEXT:    .reg .b32 %r<4>;
 ; CHECK-EMPTY:
 ; CHECK-NEXT:  // %bb.0:
 ; CHECK-NEXT:    ld.param.b32 %r1, [test_copysign_param_0];
 ; CHECK-NEXT:    ld.param.b32 %r2, [test_copysign_param_1];
-; CHECK-NEXT:    xor.b32 %r3, %r1, %r2;
-; CHECK-NEXT:    and.b32 %r4, %r3, -2147450880;
-; CHECK-NEXT:    xor.b32 %r5, %r1, %r4;
-; CHECK-NEXT:    st.param.b32 [func_retval0], %r5;
+; CHECK-NEXT:    lop3.b32 %r3, %r1, %r2, -2147450880, 216;
+; CHECK-NEXT:    st.param.b32 [func_retval0], %r3;
 ; CHECK-NEXT:    ret;
   %r = call <2 x bfloat> @llvm.copysign.f16(<2 x bfloat> %a, <2 x bfloat> %b)
   ret <2 x bfloat> %r

@@ -2257,8 +2257,7 @@ SDValue NVPTXTargetLowering::LowerFCOPYSIGN(SDValue Op,
   SDValue Sign = DAG.getBitcast(SrcIntVT, In2);
   SDValue MagLo;
   if (VT == MVT::f64) {
-    // Only the high word changes. Keep sign extension and bitwise operations
-    // 32-bit so ptxas can combine them without materializing a 64-bit sign.
+    // Only the high word changes, so keep the bitwise operations 32-bit.
     IntVT = MVT::i32;
     std::tie(MagLo, Mag) = DAG.SplitScalar(Mag, DL, IntVT, IntVT);
   }
@@ -2277,17 +2276,23 @@ SDValue NVPTXTargetLowering::LowerFCOPYSIGN(SDValue Op,
   }
   APInt SignMask = VT.isVector() ? APInt(32, 0x80008000)
                                  : APInt::getSignMask(IntVT.getSizeInBits());
-  // This is equivalent to:
-  //    (Mag & ~SignMask) | (Sign & SignMask)
-  // which uses 4 input values (including the 2 constants). We can instead
-  // write it as:
-  //    Mag ^ ((Mag ^ Sign) & SignMask)
-  // which only uses 3 inputs, so ptxas can fuse it into a single lop3
-  // instruction.
-  SDValue Diff = DAG.getNode(ISD::XOR, DL, IntVT, Mag, Sign);
-  Diff = DAG.getNode(ISD::AND, DL, IntVT, Diff,
-                     DAG.getConstant(SignMask, DL, IntVT));
-  SDValue Result = DAG.getNode(ISD::XOR, DL, IntVT, Mag, Diff);
+  SDValue Result;
+  if (IntVT == MVT::i32 && STI.hasFeature(NVPTX::SM50) &&
+      STI.hasFeature(NVPTX::PTX43)) {
+    // LOP3's truth table for (a & ~c) | (b & c) is 0xd8.
+    Result = DAG.getNode(NVPTXISD::LOP3, DL, IntVT, Mag, Sign,
+                         DAG.getConstant(SignMask, DL, IntVT),
+                         DAG.getConstant(0xd8, DL, MVT::i32));
+  } else {
+    // Equivalent to (Mag & ~SignMask) | (Sign & SignMask).
+    // Keep scalar f16/bf16 operations 16-bit: widening for lop3.b32 adds
+    // conversions that ptxas cannot eliminate. This masked XOR still fuses
+    // into a single SASS LOP3 on targets that support it.
+    SDValue Diff = DAG.getNode(ISD::XOR, DL, IntVT, Mag, Sign);
+    Diff = DAG.getNode(ISD::AND, DL, IntVT, Diff,
+                       DAG.getConstant(SignMask, DL, IntVT));
+    Result = DAG.getNode(ISD::XOR, DL, IntVT, Mag, Diff);
+  }
   if (VT == MVT::f64)
     Result = DAG.getNode(NVPTXISD::BUILD_VECTOR, DL, MVT::i64, MagLo, Result);
   return DAG.getBitcast(VT, Result);
